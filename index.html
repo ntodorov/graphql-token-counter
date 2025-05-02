@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GraphQL Token Counter</title>
+    <style>
+      :root {
+        --primary-color: #6366f1;
+        --primary-hover: #4f46e5;
+        --background-color: #f9fafb;
+        --card-color: #ffffff;
+        --text-color: #1f2937;
+        --border-color: #e5e7eb;
+      }
+
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        line-height: 1.5;
+        color: var(--text-color);
+        background-color: var(--background-color);
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+
+      .container {
+        max-width: 800px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+
+      header {
+        text-align: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+
+      h1 {
+        color: var(--primary-color);
+        margin-bottom: 0.5rem;
+      }
+
+      .description {
+        color: #6b7280;
+        font-size: 1.1rem;
+      }
+
+      .card {
+        background-color: var(--card-color);
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .input-area {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .button-group {
+        display: flex;
+        gap: 0.75rem;
+        margin-top: 1rem;
+      }
+
+      label {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+      }
+
+      #graphql-query {
+        height: 200px;
+        margin-bottom: 1rem;
+        padding: 0.75rem;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-family: monospace;
+        resize: vertical;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      button {
+        background-color: var(--primary-color);
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 6px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+
+      button:hover {
+        background-color: var(--primary-hover);
+      }
+
+      button.secondary {
+        background-color: #e5e7eb;
+        color: #4b5563;
+      }
+
+      button.secondary:hover {
+        background-color: #d1d5db;
+      }
+
+      .result-card {
+        margin-top: 1.5rem;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      .result-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
+
+      .token-count {
+        font-size: 1.2rem;
+        font-weight: 600;
+      }
+
+      .token-label {
+        font-size: 0.9rem;
+        color: #6b7280;
+      }
+
+      #token-details {
+        margin-top: 1rem;
+        padding: 1rem;
+        background-color: #f3f4f6;
+        border-radius: 6px;
+        font-family: monospace;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+
+      .error {
+        color: #dc2626;
+        padding: 0.75rem;
+        background-color: #fee2e2;
+        border-radius: 6px;
+        margin-top: 1rem;
+        font-weight: 500;
+      }
+
+      footer {
+        margin-top: auto;
+        padding: 1.5rem 0;
+        text-align: center;
+        color: #6b7280;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>GraphQL Token Counter</h1>
+        <p class="description">
+          Count tokens in your GraphQL queries and mutations
+        </p>
+      </header>
+
+      <main>
+        <div class="card">
+          <div class="input-area">
+            <label for="graphql-query">Enter your GraphQL query:</label>
+            <textarea
+              id="graphql-query"
+              placeholder="Enter your GraphQL query or mutation here..."
+            >
+query GetUser($id: ID!) {
+  user(id: $id) {
+    name
+    email
+  }
+}</textarea
+            >
+            <div class="button-group">
+              <button id="count-tokens">Count Tokens</button>
+              <button id="reset-query" class="secondary">Reset</button>
+            </div>
+          </div>
+          <div id="error-container" class="error hidden"></div>
+        </div>
+
+        <div id="result-container" class="card result-card hidden">
+          <div class="result-info">
+            <div>
+              <div class="token-count" id="token-count">0</div>
+              <div class="token-label">Total Tokens</div>
+            </div>
+          </div>
+          <div id="token-details"></div>
+        </div>
+      </main>
+
+      <footer>
+        <p>GraphQL Token Counter &copy; 2025</p>
+      </footer>
+    </div>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const queryTextarea = document.getElementById('graphql-query');
+        const countButton = document.getElementById('count-tokens');
+        const resetButton = document.getElementById('reset-query');
+        const resultContainer = document.getElementById('result-container');
+        const tokenCountElement = document.getElementById('token-count');
+        const tokenDetailsElement = document.getElementById('token-details');
+        const errorContainer = document.getElementById('error-container');
+
+        // Only count tokens when the button is clicked
+        countButton.addEventListener('click', countTokensAndDisplay);
+
+        // Add reset button functionality
+        resetButton.addEventListener('click', resetQueryAndResults);
+
+        function resetQueryAndResults() {
+          // Clear the textarea
+          queryTextarea.value = '';
+
+          // Hide the results and error
+          resultContainer.classList.add('hidden');
+          errorContainer.classList.add('hidden');
+        }
+
+        function countTokensAndDisplay() {
+          const query = queryTextarea.value;
+
+          try {
+            errorContainer.classList.add('hidden');
+            const { count, tokens } = countGraphQLTokens(query);
+
+            // Update and show results
+            tokenCountElement.textContent = count;
+            displayTokenDetails(tokens);
+            resultContainer.classList.remove('hidden');
+          } catch (error) {
+            // Show error
+            errorContainer.textContent = `Error: ${error.message}`;
+            errorContainer.classList.remove('hidden');
+            resultContainer.classList.add('hidden');
+          }
+        }
+
+        function displayTokenDetails(tokens) {
+          const details = tokens
+            .map((token, index) => {
+              return `<div>[${index + 1}] <strong>${token.kind}</strong>: "${
+                token.value
+              }"</div>`;
+            })
+            .join('');
+
+          tokenDetailsElement.innerHTML = details;
+        }
+
+        // Simple GraphQL token types
+        const TokenKind = {
+          SOF: '<SOF>',
+          EOF: '<EOF>',
+          BANG: '!',
+          DOLLAR: '$',
+          AMP: '&',
+          PAREN_L: '(',
+          PAREN_R: ')',
+          SPREAD: '...',
+          COLON: ':',
+          EQUALS: '=',
+          AT: '@',
+          BRACKET_L: '[',
+          BRACKET_R: ']',
+          BRACE_L: '{',
+          PIPE: '|',
+          BRACE_R: '}',
+          NAME: 'Name',
+          INT: 'Int',
+          FLOAT: 'Float',
+          STRING: 'String',
+          BLOCK_STRING: 'BlockString',
+          COMMENT: 'Comment',
+        };
+
+        function countGraphQLTokens(query) {
+          const tokens = [];
+          let pos = 0;
+          const source = query;
+          let tokenCount = 0;
+
+          // Helper functions
+          function isWhitespace(code) {
+            return (
+              code === 9 || // \t
+              code === 32 || // <space>
+              code === 44 || // ,
+              code === 13 || // \r
+              code === 10 // \n
+            );
+          }
+
+          function isLetter(code) {
+            return (
+              (code >= 65 && code <= 90) || // A-Z
+              (code >= 97 && code <= 122) // a-z
+            );
+          }
+
+          function isDigit(code) {
+            return code >= 48 && code <= 57; // 0-9
+          }
+
+          function isNameStart(code) {
+            return isLetter(code) || code === 95; // _ underscore
+          }
+
+          function isNameContinue(code) {
+            return isLetter(code) || isDigit(code) || code === 95; // _ underscore
+          }
+
+          function readName() {
+            const start = pos;
+            let code;
+
+            do {
+              code = source.charCodeAt(++pos);
+            } while (
+              pos < source.length &&
+              (isNameContinue(code) || code === 45)
+            ); // - dash
+
+            return {
+              kind: TokenKind.NAME,
+              value: source.slice(start, pos),
+            };
+          }
+
+          function readDigits() {
+            let code;
+            do {
+              code = source.charCodeAt(++pos);
+            } while (pos < source.length && isDigit(code));
+          }
+
+          function readNumber() {
+            const start = pos;
+            let code = source.charCodeAt(pos);
+            let isFloat = false;
+
+            // Read integer part
+            if (code === 45) {
+              // -
+              code = source.charCodeAt(++pos);
+            }
+
+            if (code === 48) {
+              // 0
+              code = source.charCodeAt(++pos);
+            } else if (isDigit(code)) {
+              readDigits();
+            }
+
+            // Read decimal part
+            if (source.charCodeAt(pos) === 46) {
+              // .
+              isFloat = true;
+              code = source.charCodeAt(++pos);
+              readDigits();
+            }
+
+            // Read exponent part
+            code = source.charCodeAt(pos);
+            if (code === 69 || code === 101) {
+              // E e
+              isFloat = true;
+              code = source.charCodeAt(++pos);
+              if (code === 43 || code === 45) {
+                // + -
+                code = source.charCodeAt(++pos);
+              }
+              readDigits();
+            }
+
+            return {
+              kind: isFloat ? TokenKind.FLOAT : TokenKind.INT,
+              value: source.slice(start, pos),
+            };
+          }
+
+          function readString() {
+            const start = pos;
+            let value = '';
+            let chunkStart = ++pos;
+            let code;
+
+            while (
+              pos < source.length &&
+              (code = source.charCodeAt(pos)) !== 34 && // "
+              code !== 10 && // \n
+              code !== 13 // \r
+            ) {
+              ++pos;
+              if (code === 92) {
+                // \
+                value += source.slice(chunkStart, pos);
+                code = source.charCodeAt(++pos);
+
+                switch (code) {
+                  case 34:
+                    value += '"';
+                    break;
+                  case 47:
+                    value += '/';
+                    break;
+                  case 92:
+                    value += '\\';
+                    break;
+                  case 98:
+                    value += '\b';
+                    break;
+                  case 102:
+                    value += '\f';
+                    break;
+                  case 110:
+                    value += '\n';
+                    break;
+                  case 114:
+                    value += '\r';
+                    break;
+                  case 116:
+                    value += '\t';
+                    break;
+                  default:
+                    // Skip other escaped characters
+                    break;
+                }
+
+                chunkStart = pos + 1;
+              }
+            }
+
+            if (source.charCodeAt(pos) !== 34) {
+              // "
+              throw new Error('Unterminated string');
+            }
+
+            value += source.slice(chunkStart, pos);
+            ++pos; // Skip closing quote
+
+            return {
+              kind: TokenKind.STRING,
+              value,
+            };
+          }
+
+          // Count tokens
+          tokens.push({ kind: TokenKind.SOF, value: '' });
+          tokenCount++;
+
+          while (pos < source.length) {
+            let code = source.charCodeAt(pos);
+
+            // Ignore whitespace
+            if (isWhitespace(code)) {
+              ++pos;
+              continue;
+            }
+
+            // Extract token
+            let token;
+
+            if (isNameStart(code)) {
+              token = readName();
+            } else if (code === 34) {
+              // "
+              token = readString();
+            } else if (isDigit(code) || code === 45) {
+              // - (negative number)
+              token = readNumber();
+            } else {
+              // Handle punctuation
+              switch (code) {
+                case 33: // !
+                  ++pos;
+                  token = { kind: TokenKind.BANG, value: '!' };
+                  break;
+                case 36: // $
+                  ++pos;
+                  token = { kind: TokenKind.DOLLAR, value: '$' };
+                  break;
+                case 38: // &
+                  ++pos;
+                  token = { kind: TokenKind.AMP, value: '&' };
+                  break;
+                case 40: // (
+                  ++pos;
+                  token = { kind: TokenKind.PAREN_L, value: '(' };
+                  break;
+                case 41: // )
+                  ++pos;
+                  token = { kind: TokenKind.PAREN_R, value: ')' };
+                  break;
+                case 46: // .
+                  if (
+                    pos + 2 < source.length &&
+                    source.charCodeAt(pos + 1) === 46 &&
+                    source.charCodeAt(pos + 2) === 46
+                  ) {
+                    pos += 3;
+                    token = { kind: TokenKind.SPREAD, value: '...' };
+                  } else {
+                    throw new Error(
+                      `Unexpected character: ${String.fromCharCode(code)}`
+                    );
+                  }
+                  break;
+                case 58: // :
+                  ++pos;
+                  token = { kind: TokenKind.COLON, value: ':' };
+                  break;
+                case 61: // =
+                  ++pos;
+                  token = { kind: TokenKind.EQUALS, value: '=' };
+                  break;
+                case 64: // @
+                  ++pos;
+                  token = { kind: TokenKind.AT, value: '@' };
+                  break;
+                case 91: // [
+                  ++pos;
+                  token = { kind: TokenKind.BRACKET_L, value: '[' };
+                  break;
+                case 93: // ]
+                  ++pos;
+                  token = { kind: TokenKind.BRACKET_R, value: ']' };
+                  break;
+                case 123: // {
+                  ++pos;
+                  token = { kind: TokenKind.BRACE_L, value: '{' };
+                  break;
+                case 124: // |
+                  ++pos;
+                  token = { kind: TokenKind.PIPE, value: '|' };
+                  break;
+                case 125: // }
+                  ++pos;
+                  token = { kind: TokenKind.BRACE_R, value: '}' };
+                  break;
+                case 35: // # (comment)
+                  const commentStart = pos;
+                  do {
+                    ++pos;
+                  } while (
+                    pos < source.length &&
+                    source.charCodeAt(pos) !== 10 && // \n
+                    source.charCodeAt(pos) !== 13 // \r
+                  );
+                  token = {
+                    kind: TokenKind.COMMENT,
+                    value: source.slice(commentStart, pos),
+                  };
+                  break;
+                default:
+                  throw new Error(
+                    `Unexpected character: ${String.fromCharCode(code)}`
+                  );
+              }
+            }
+
+            tokens.push(token);
+            tokenCount++;
+          }
+
+          tokens.push({ kind: TokenKind.EOF, value: '' });
+          tokenCount++;
+
+          return { count: tokenCount, tokens };
+        }
+
+        // No need to call countTokensAndDisplay on page load
+      });
+    </script>
+  </body>
+</html>
